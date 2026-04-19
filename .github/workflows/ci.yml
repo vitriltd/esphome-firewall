@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff yamllint
+      - name: Ruff check
+        run: ruff check components/
+      - name: Ruff format
+        run: ruff format --check components/
+      - name: YAML lint
+        run: yamllint -d relaxed tests/*.yaml
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: Python unit tests
+        run: pytest tests/ -v
+
+  compile:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      matrix:
+        test:
+          - tests/test.esp32-idf.yaml
+          - tests/test.esp32-idf-runtime.yaml
+    container:
+      image: ghcr.io/esphome/esphome:dev
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create secrets stub
+        run: |
+          cat > tests/secrets.yaml << 'EOF'
+          wifi_ssid: "test"
+          wifi_password: "testtest"
+          EOF
+      - name: Compile ${{ matrix.test }}
+        run: esphome compile ${{ matrix.test }}

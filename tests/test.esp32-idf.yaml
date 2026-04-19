@@ -1,0 +1,28 @@
+esphome:
+  name: firewall-test
+  friendly_name: Firewall Test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+firewall:
+  trusted:
+    - 10.0.0.0/24
+    - 192.168.1.0/24
+    - fd00::/48
+    - 2001:db8::/32
+  block_icmp: false
+  log_dropped: true
