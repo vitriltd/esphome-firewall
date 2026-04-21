@@ -4,7 +4,7 @@ Device-level inbound TCP filtering for ESP32 devices running ESPHome with ESP-ID
 
 ESPHome's security model assumes devices operate on trusted networks protected by perimeter firewalls. This is sound for the majority of deployments. However, some scenarios fall outside that assumption: cellular/4G modems on carrier networks, devices on shared office or retail WiFi, flat IoT VLANs without ACLs. This component is an additive layer for those cases. It does not replace ESPHome's existing security measures -- it extends coverage to deployments where the trusted-network assumption does not hold.
 
-The component uses lwIP's `LWIP_HOOK_IP4_INPUT` to silently drop unsolicited inbound TCP connections (SYN packets) from sources not in a configurable trusted list. Outbound traffic, UDP (DNS, NTP, WireGuard), and traffic from trusted sources are unaffected. When not included in a configuration, there is zero overhead.
+The component uses lwIP's `LWIP_HOOK_IP4_INPUT` to silently drop unsolicited inbound TCP connections (SYN packets) from sources not in a configurable trusted list. Outbound traffic, UDP (DNS, NTP, WireGuard), and traffic from trusted sources are unaffected. Rejected SYNs are dropped in the input hook, before lwIP's TCP state machine — no PCB allocation and no connection tracking for filtered traffic.
 
 ## Installation
 
@@ -37,7 +37,8 @@ firewall:
 
 ## Documentation
 
-Full configuration reference, traffic behaviour table, WireGuard integration guide, and example configurations: [docs/firewall.md](docs/firewall.md)
+- [docs/firewall.md](docs/firewall.md) — full configuration reference, traffic behaviour table, WireGuard integration guide, and example configurations
+- [docs/benchmarks.md](docs/benchmarks.md) — SYN flood resilience benchmark (firewall on vs off)
 
 ## License
 

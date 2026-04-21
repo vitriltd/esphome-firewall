@@ -1,10 +1,10 @@
 # Firewall Component
 
-The firewall component provides device-level inbound TCP filtering for ESP32 devices. It silently drops unsolicited inbound TCP connections from sources not in a configurable trusted list, while leaving all outbound traffic and UDP completely unaffected.
+The firewall component provides device-level inbound TCP filtering for ESP32 devices. It silently drops unsolicited inbound TCP connections from sources not in a configurable trusted list, while leaving all outbound traffic and UDP unaffected.
 
 ## When you need this
 
-ESPHome's default security model assumes devices operate on trusted networks (home WiFi, VLANs) protected by perimeter firewalls and network segmentation. This is a sound assumption for the vast majority of deployments, and ESPHome provides application-level protections (`api: encryption`, `web_server: auth`) that work well in that context.
+ESPHome's default security model assumes devices operate on trusted networks (home WiFi, VLANs) protected by perimeter firewalls and network segmentation. This holds for most deployments, and ESPHome provides application-level protections (`api: encryption`, `web_server: auth`) that work well in that context.
 
 However, some deployment scenarios fall outside the trusted-network assumption:
 
@@ -37,7 +37,7 @@ firewall:
 
 - **trusted** (*Optional*, list of CIDR strings): IP subnets allowed to make inbound TCP connections. Supports both IPv4 and IPv6 in the same list, specified in CIDR notation (e.g. `10.0.0.0/24`, `192.168.1.100/32`, `fd00::/48`, `2001:db8:1234::/48`). If omitted or empty, all unsolicited inbound TCP is blocked with no exceptions.
 
-- **block_icmp** (*Optional*, boolean): Also block inbound ICMP/ICMPv6 echo (ping) from untrusted sources. Defaults to `false`. Useful for hiding the device from ping sweeps, but makes network debugging harder. IPv6 Neighbour Discovery (NDP, ICMPv6 types 133--137) is always allowed regardless of this setting, as blocking it would break IPv6 networking.
+- **block_icmp** (*Optional*, boolean): Also block inbound ICMP/ICMPv6 echo (ping) from untrusted sources. Defaults to `false`. Useful for hiding the device from ping sweeps, but makes network debugging harder. IPv6 Neighbour Discovery (NDP, ICMPv6 types 133--137) is always allowed, as blocking it would break IPv6 networking.
 
 - **log_dropped** (*Optional*, boolean): Log dropped packets at DEBUG level. Defaults to `false`. Logs are rate-limited to one entry per 5 seconds with a count of drops in the interval, so port scans don't flood the log buffer.
 
@@ -45,7 +45,7 @@ firewall:
 
 - **runtime_slots** (*Optional*, integer, 1--32): Number of extra pre-allocated slots for runtime trusted-subnet additions. Only used when `allow_runtime_changes` is `true`. Defaults to `8`. No heap allocation occurs -- slots are pre-allocated at compile time.
 
-- **runtime_ttl** (*Optional*, time period): How long runtime-added trusted subnets remain active before auto-expiring. Only used when `allow_runtime_changes` is `true`. Defaults to `0s` (no expiry). Example: `30min` means runtime entries are automatically removed after 30 minutes. Compile-time `trusted:` entries never expire regardless of this setting.
+- **runtime_ttl** (*Optional*, time period): How long runtime-added trusted subnets remain active before auto-expiring. Only used when `allow_runtime_changes` is `true`. Defaults to `0s` (no expiry). Example: `30min` means runtime entries are automatically removed after 30 minutes. Compile-time `trusted:` entries never expire.
 
 ## How It Works
 
@@ -70,11 +70,13 @@ This blocks new unsolicited inbound connections while allowing:
 | ICMPv6 NDP (types 133--137) | **Always allowed** (required for IPv6 networking) |
 | Established TCP (responses to your connections) | Allowed (ACK flag set) |
 
+Rejected SYNs are dropped inside `ip4_input()` / `ip6_input()` before `tcp_input()` runs, so no `tcp_pcb` is allocated for filtered traffic. See [benchmarks.md](benchmarks.md) for a SYN flood test showing what this looks like in practice.
+
 ## WireGuard Integration
 
 WireGuard traffic arrives on the PPP/WiFi/Ethernet interface as **encrypted UDP** -- which the firewall allows through. The WireGuard component decrypts it and presents the inner packets on a separate WireGuard network interface.
 
-This means services accessed through a WireGuard tunnel **bypass the firewall entirely** because the decrypted packets never arrive on the filtered interface. The firewall only sees the outer UDP envelope, which it passes.
+This means services accessed through a WireGuard tunnel **bypass the firewall** because the decrypted packets never arrive on the filtered interface. The firewall only sees the outer UDP envelope, which it passes.
 
 To allow management access only via WireGuard:
 
@@ -142,7 +144,7 @@ When `runtime_ttl` is set to a non-zero value, runtime entries automatically exp
 [I][firewall]: Runtime subnet expired: 192.168.1.100/255.255.255.255
 ```
 
-Compile-time `trusted:` entries have `runtime_ttl` has no effect on them -- they are permanent.
+Compile-time `trusted:` entries are permanent — `runtime_ttl` has no effect on them.
 
 ### Security Note
 
@@ -204,7 +206,7 @@ packet_transport:
     rolling_code_enable: true
 ```
 
-The component uses XXTEA encryption with an optional monotonic rolling code for replay protection. While not modern authenticated encryption (no AEAD, no forward secrecy), it is appropriate for the threat model of broadcasting sensor values between ESPHome devices and is dramatically better than cleartext on a shared network.
+The component uses XXTEA encryption with an optional monotonic rolling code for replay protection. This is not modern authenticated encryption (no AEAD, no forward secrecy), but it prevents casual eavesdropping and trivial spoofing of broadcast sensor values on shared networks — which cleartext transmission does not.
 
 ## Example Configurations
 
